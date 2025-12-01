@@ -8,15 +8,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Configuración de Tailwind para un tema azul y neón -->
     <script>
+        // Esta sección solo configura Tailwind, las constantes se definen en el script principal
+        
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
                         'neo-dark': '#0f172a',
-                        // Nuevos colores azules
-                        'neo-blue-strong': '#3b82f6', // Azul fuerte
-                        'neo-cyan': '#06b6d4',      // Azul claro/cyan
-                        'neo-darker-blue': '#1e3a8a', // Azul muy oscuro
+                        // Colores de Neón
+                        'neo-blue-strong': '#3b82f6', 
+                        'neo-cyan': '#06b6d4',      
+                        'neo-darker-blue': '#1e3a8a', 
                         'neo-print-bg': '#4f46e5', // Índigo para impresiones
                     },
                     fontFamily: {
@@ -43,6 +45,8 @@
             background-size: 400% 400%;
             animation: gradient-x 15s ease infinite;
             min-height: 100vh;
+            /* Asegura que el texto blanco sea el color predeterminado */
+            color: #ffffff; 
         }
 
         /* Estilo para los botones con efecto neón (Azul/Cyan) */
@@ -55,10 +59,11 @@
             transform: scale(1.03);
         }
 
-        /* Estilo para la tarjeta de PC */
+        /* Estilo para la tarjeta de PC (CONTRASTE MEJORADO) */
         .pc-card {
             backdrop-filter: blur(10px);
-            background-color: rgba(30, 41, 59, 0.8);
+            /* Fondo más oscuro (casi totalmente opaco) para mejorar el contraste */
+            background-color: rgba(15, 23, 42, 0.95); 
             /* Borde con color azul fuerte */
             border: 1px solid rgba(59, 130, 246, 0.5);
         }
@@ -88,9 +93,8 @@
             Neopixel
         </h1>
         <p class="text-xl text-gray-300 mt-2">Gestión de Tiempo en Ciber Café Gráfico</p>
-        <div class="flex flex-wrap justify-center gap-4 mt-4 p-4 bg-neo-dark rounded-xl border border-neo-blue-strong max-w-sm mx-auto">
-            <span class="text-sm font-medium text-gray-400">PC: <span class="text-neo-cyan font-bold">$20 MXN / Hora</span></span>
-            <span class="text-sm font-medium text-gray-400">Impresión: <span class="text-neo-print-bg font-bold">$3.00 MXN / C/U</span></span>
+        <div id="rates-display" class="flex flex-wrap justify-center gap-4 mt-4 p-4 bg-neo-dark rounded-xl border border-neo-blue-strong max-w-sm mx-auto">
+            <!-- Las tarifas se inyectarán aquí por JavaScript para reflejar las constantes -->
         </div>
     </header>
 
@@ -101,7 +105,7 @@
 
     <!-- Script de JavaScript -->
     <script>
-        // --- Configuración Global y Tarifas ---
+        // *** ESTAS CONSTANTES CONTROLAN LAS TARIFAS DE COBRO ***
         const HOURLY_RATE_MXN = 20; // $20 MXN por hora
         const PRINT_COST_MXN = 3.00; // $3.00 MXN por impresión
         const PC_COUNT = 10; // Número de computadoras a gestionar
@@ -116,13 +120,23 @@
             finalCost: 0,
             sessionStarted: false,
             // Campo solo para impresiones
-            prints: 0,
-            serviceCost: 0, // Costo total de impresiones
+            impresiones: 0, 
+            serviceCost: 0, 
         }));
 
         const pcContainer = document.getElementById('pc-container');
+        const ratesDisplay = document.getElementById('rates-display');
+
 
         // --- Funciones de Utilidad ---
+
+        // Función para mostrar las tarifas iniciales
+        function displayRates() {
+            ratesDisplay.innerHTML = `
+                <span class="text-sm font-medium text-gray-400">PC: <span class="text-neo-cyan font-bold">$${HOURLY_RATE_MXN.toFixed(2)} MXN / Hora</span></span>
+                <span class="text-sm font-medium text-gray-400">Impresión: <span class="text-neo-print-bg font-bold">$${PRINT_COST_MXN.toFixed(2)} MXN / C/U</span></span>
+            `;
+        }
 
         // Convierte milisegundos a formato HH:MM:SS
         function formatTime(ms) {
@@ -136,17 +150,27 @@
             return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
         }
 
-        // Calcula el costo del tiempo de PC en MXN
+        /**
+         * Calcula el costo del tiempo de PC en MXN.
+         * La lógica ha sido modificada para cobrar solo por los minutos completos transcurridos,
+         * manteniendo la tarifa de $20 MXN por hora, tal como fue solicitado.
+         */
         function calculatePCCost(ms) {
-            const totalHours = ms / (1000 * 60 * 60);
-            const cost = totalHours * HOURLY_RATE_MXN;
+            // 1. Obtener los minutos completos transcurridos (truncando los segundos)
+            const totalFullMinutes = Math.floor(ms / (1000 * 60)); 
+            
+            // 2. Calcular el costo basándose en los minutos completos (20/60 = costo por minuto)
+            const cost = (totalFullMinutes / 60) * HOURLY_RATE_MXN;
+            
+            // 3. Devolver el costo con dos decimales
             return parseFloat(cost.toFixed(2));
         }
 
         // Calcula el costo total (PC + Impresiones)
         function calculateTotalCost(pc) {
             const pcCost = calculatePCCost(pc.elapsedTime);
-            const serviceCost = (pc.prints * PRINT_COST_MXN);
+            // Costo del servicio = cantidad de impresiones * costo por impresión
+            const serviceCost = (pc.impresiones * PRINT_COST_MXN);
             
             // Actualizar el costo de servicio en el objeto PC
             pc.serviceCost = parseFloat(serviceCost.toFixed(2));
@@ -165,7 +189,7 @@
             if (!pc.sessionStarted) {
                 pc.elapsedTime = 0; 
                 pc.finalCost = 0;
-                pc.prints = 0;
+                pc.impresiones = 0;
                 pc.sessionStarted = true;
             }
             
@@ -206,7 +230,7 @@
 
             pc.elapsedTime = 0;
             pc.finalCost = 0;
-            pc.prints = 0;
+            pc.impresiones = 0;
             pc.serviceCost = 0;
             pc.sessionStarted = false;
             updatePCDisplay(pc);
@@ -217,7 +241,7 @@
             const pc = pcs.find(p => p.id === pcId);
             const count = Math.max(0, parseInt(value) || 0); // Asegura que sea un número no negativo
 
-            pc.prints = count;
+            pc.impresiones = count;
 
             // Recalcular el costo total inmediatamente
             pc.finalCost = calculateTotalCost(pc);
@@ -254,10 +278,10 @@
                 <div class="mb-6 space-y-3">
                     <!-- Impresiones -->
                     <div class="flex items-center bg-neo-print-bg/20 p-3 rounded-lg border border-neo-print-bg/50">
-                        <label for="prints-${pc.id}" class="text-sm font-medium w-1/2">
+                        <label for="impresiones-${pc.id}" class="text-sm font-medium w-1/2">
                             Impresiones (📄)
                         </label>
-                        <input id="prints-${pc.id}" type="number" min="0" value="0"
+                        <input id="impresiones-${pc.id}" type="number" min="0" value="0"
                             onchange="updatePrintCount(${pc.id}, this.value)"
                             class="service-input w-1/2 p-1.5 text-right rounded-md bg-neo-dark text-white border border-neo-print-bg focus:ring-1 focus:ring-neo-print-bg" />
                     </div>
@@ -293,7 +317,7 @@
                     </p>
                     <p class="text-xs text-left text-gray-400">
                         Servicios: <span id="final-service-cost-${pc.id}">$0.00</span>
-                        (<span id="final-prints-${pc.id}">0</span> imp.)
+                        (<span id="final-impresiones-${pc.id}">0</span> imp.)
                     </p>
                     <hr class="border-gray-700 my-2">
                     <p class="text-lg font-extrabold text-green-400 text-center">
@@ -319,7 +343,7 @@
             const resetContainer = document.getElementById(`reset-container-${pc.id}`);
 
             // Input de impresión
-            const inputPrints = document.getElementById(`prints-${pc.id}`);
+            const inputPrints = document.getElementById(`impresiones-${pc.id}`);
             
             // Recalcular costos y tiempo en cada actualización
             const displayTime = formatTime(pc.elapsedTime);
@@ -332,7 +356,7 @@
             totalCostDisplay.textContent = `$${currentTotalCost.toFixed(2)} MXN`;
 
             // Asegurar que el input refleje el estado actual
-            inputPrints.value = pc.prints;
+            inputPrints.value = pc.impresiones;
 
             // 2. Actualizar Estado
             if (pc.isRunning) {
@@ -369,7 +393,7 @@
                     document.getElementById(`final-time-${pc.id}`).textContent = displayTime;
                     document.getElementById(`final-pc-cost-${pc.id}`).textContent = `$${currentPCCost.toFixed(2)}`;
                     document.getElementById(`final-service-cost-${pc.id}`).textContent = `$${pc.serviceCost.toFixed(2)}`;
-                    document.getElementById(`final-prints-${pc.id}`).textContent = pc.prints;
+                    document.getElementById(`final-impresiones-${pc.id}`).textContent = pc.impresiones;
                     document.getElementById(`final-total-cost-${pc.id}`).textContent = `$${currentTotalCost.toFixed(2)} MXN`;
                     
                 } else {
@@ -384,6 +408,7 @@
 
         // Inicializa la aplicación
         function initializeApp() {
+            displayRates();
             pcContainer.innerHTML = '';
             pcs.forEach(pc => {
                 pcContainer.appendChild(createPCCard(pc));
@@ -397,3 +422,4 @@
     </script>
 </body>
 </html>
+
