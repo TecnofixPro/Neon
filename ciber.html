@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neopixel | Ciber Café Manager</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuración de Tailwind para un tema azul y neón -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'neo-dark': '#0f172a',
+                        // Nuevos colores azules
+                        'neo-blue-strong': '#3b82f6', // Azul fuerte
+                        'neo-cyan': '#06b6d4',      // Azul claro/cyan
+                        'neo-darker-blue': '#1e3a8a', // Azul muy oscuro
+                        'neo-print-bg': '#4f46e5', // Índigo para impresiones
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'gradient-x': 'gradient-x 6s ease infinite',
+                    },
+                    keyframes: {
+                        'gradient-x': {
+                            '0%, 100%': { 'background-size': '200% 200%', 'background-position': 'left center' },
+                            '50%': { 'background-size': '200% 200%', 'background-position': 'right center' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Estilo para el fondo dinámico de neón (Azules) */
+        body {
+            /* Degradado entre azul muy oscuro, azul fuerte, cyan y oscuro */
+            background: linear-gradient(-45deg, #1e3a8a, #3b82f6, #06b6d4, #0f172a);
+            background-size: 400% 400%;
+            animation: gradient-x 15s ease infinite;
+            min-height: 100vh;
+        }
+
+        /* Estilo para los botones con efecto neón (Azul/Cyan) */
+        .neon-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 5px #3b82f6, 0 0 10px #3b82f6;
+        }
+        .neon-button:hover {
+            box-shadow: 0 0 10px #06b6d4, 0 0 20px #06b6d4;
+            transform: scale(1.03);
+        }
+
+        /* Estilo para la tarjeta de PC */
+        .pc-card {
+            backdrop-filter: blur(10px);
+            background-color: rgba(30, 41, 59, 0.8);
+            /* Borde con color azul fuerte */
+            border: 1px solid rgba(59, 130, 246, 0.5);
+        }
+
+        /* Estilo para el indicador de estado */
+        .status-on {
+            box-shadow: 0 0 8px #06b6d4, 0 0 15px #06b6d4;
+        }
+
+        /* Estilo para los campos de servicio */
+        .service-input {
+            appearance: none;
+            -moz-appearance: textfield; /* Para Firefox */
+        }
+        .service-input::-webkit-outer-spin-button,
+        .service-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="font-sans text-white p-4">
+
+    <!-- Encabezado de la Aplicación -->
+    <header class="text-center mb-12 mt-6">
+        <h1 class="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-neo-blue-strong to-neo-cyan tracking-tight">
+            Neopixel
+        </h1>
+        <p class="text-xl text-gray-300 mt-2">Gestión de Tiempo en Ciber Café Gráfico</p>
+        <div class="flex flex-wrap justify-center gap-4 mt-4 p-4 bg-neo-dark rounded-xl border border-neo-blue-strong max-w-sm mx-auto">
+            <span class="text-sm font-medium text-gray-400">PC: <span class="text-neo-cyan font-bold">$20 MXN / Hora</span></span>
+            <span class="text-sm font-medium text-gray-400">Impresión: <span class="text-neo-print-bg font-bold">$3.00 MXN / C/U</span></span>
+        </div>
+    </header>
+
+    <!-- Contenedor de las Tarjetas de PC -->
+    <main id="pc-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 max-w-7xl mx-auto">
+        <!-- Las tarjetas de PC se inyectarán aquí por JavaScript -->
+    </main>
+
+    <!-- Script de JavaScript -->
+    <script>
+        // --- Configuración Global y Tarifas ---
+        const HOURLY_RATE_MXN = 20; // $20 MXN por hora
+        const PRINT_COST_MXN = 3.00; // $3.00 MXN por impresión
+        const PC_COUNT = 10; // Número de computadoras a gestionar
+
+        // Estado inicial de las computadoras
+        let pcs = Array.from({ length: PC_COUNT }, (_, i) => ({
+            id: i + 1,
+            isRunning: false,
+            startTime: 0, 
+            elapsedTime: 0, // Tiempo total transcurrido en ms
+            timerInterval: null, 
+            finalCost: 0,
+            sessionStarted: false,
+            // Campo solo para impresiones
+            prints: 0,
+            serviceCost: 0, // Costo total de impresiones
+        }));
+
+        const pcContainer = document.getElementById('pc-container');
+
+        // --- Funciones de Utilidad ---
+
+        // Convierte milisegundos a formato HH:MM:SS
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            const pad = (num) => num.toString().padStart(2, '0');
+
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+
+        // Calcula el costo del tiempo de PC en MXN
+        function calculatePCCost(ms) {
+            const totalHours = ms / (1000 * 60 * 60);
+            const cost = totalHours * HOURLY_RATE_MXN;
+            return parseFloat(cost.toFixed(2));
+        }
+
+        // Calcula el costo total (PC + Impresiones)
+        function calculateTotalCost(pc) {
+            const pcCost = calculatePCCost(pc.elapsedTime);
+            const serviceCost = (pc.prints * PRINT_COST_MXN);
+            
+            // Actualizar el costo de servicio en el objeto PC
+            pc.serviceCost = parseFloat(serviceCost.toFixed(2));
+            
+            return parseFloat((pcCost + serviceCost).toFixed(2));
+        }
+
+        // --- Lógica del Emulador ---
+
+        // Inicia el contador para una PC
+        function startSession(pcId) {
+            const pc = pcs.find(p => p.id === pcId);
+            if (pc.isRunning) return;
+
+            // Inicializa si es la primera vez que se usa la PC
+            if (!pc.sessionStarted) {
+                pc.elapsedTime = 0; 
+                pc.finalCost = 0;
+                pc.prints = 0;
+                pc.sessionStarted = true;
+            }
+            
+            // Establece el startTime para reanudar o iniciar
+            pc.startTime = Date.now() - pc.elapsedTime;
+            
+            pc.isRunning = true;
+            pc.timerInterval = setInterval(() => {
+                const now = Date.now();
+                pc.elapsedTime = now - pc.startTime;
+                updatePCDisplay(pc);
+            }, 1000); // Actualiza cada segundo
+
+            updatePCDisplay(pc);
+        }
+
+        // Detiene el contador para una PC y calcula el costo
+        function stopSession(pcId) {
+            const pc = pcs.find(p => p.id === pcId);
+            if (!pc.isRunning) return;
+
+            clearInterval(pc.timerInterval);
+            pc.isRunning = false;
+
+            // Asegura el cálculo final
+            pc.finalCost = calculateTotalCost(pc);
+
+            updatePCDisplay(pc);
+        }
+
+        // Reinicia la sesión de una PC (Borra todo)
+        function resetSession(pcId) {
+            const pc = pcs.find(p => p.id === pcId);
+
+            if (pc.isRunning) {
+                stopSession(pcId);
+            }
+
+            pc.elapsedTime = 0;
+            pc.finalCost = 0;
+            pc.prints = 0;
+            pc.serviceCost = 0;
+            pc.sessionStarted = false;
+            updatePCDisplay(pc);
+        }
+
+        // Actualiza el número de impresiones de la PC (llamado por el input)
+        function updatePrintCount(pcId, value) {
+            const pc = pcs.find(p => p.id === pcId);
+            const count = Math.max(0, parseInt(value) || 0); // Asegura que sea un número no negativo
+
+            pc.prints = count;
+
+            // Recalcular el costo total inmediatamente
+            pc.finalCost = calculateTotalCost(pc);
+            updatePCDisplay(pc);
+        }
+
+        // --- Renderizado y UI ---
+
+        // Crea el HTML para una sola tarjeta de PC
+        function createPCCard(pc) {
+            const card = document.createElement('div');
+            card.id = `pc-card-${pc.id}`;
+            card.className = 'pc-card p-6 rounded-xl shadow-2xl transition duration-300 hover:shadow-neo-blue-strong/50';
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between mb-4">
+                    <!-- Título con el emoji de PC (💻) -->
+                    <h2 class="text-3xl font-bold text-neo-blue-strong">PC ${pc.id} 💻</h2>
+                    <div id="status-${pc.id}" class="w-4 h-4 rounded-full transition duration-500"></div>
+                </div>
+
+                <div class="bg-neo-dark p-4 rounded-lg mb-4 border border-gray-700">
+                    <p class="text-sm text-gray-400">Tiempo de PC</p>
+                    <!-- Color de tiempo actualizado a cyan -->
+                    <div id="time-${pc.id}" class="text-4xl font-mono mt-1 text-neo-cyan">
+                        00:00:00
+                    </div>
+                    <div id="pc-cost-${pc.id}" class="text-sm text-gray-400 mt-1">
+                        $0.00 MXN (Solo PC)
+                    </div>
+                </div>
+
+                <!-- Sección de Servicios Adicionales (SOLO IMPRESIONES) -->
+                <div class="mb-6 space-y-3">
+                    <!-- Impresiones -->
+                    <div class="flex items-center bg-neo-print-bg/20 p-3 rounded-lg border border-neo-print-bg/50">
+                        <label for="prints-${pc.id}" class="text-sm font-medium w-1/2">
+                            Impresiones (📄)
+                        </label>
+                        <input id="prints-${pc.id}" type="number" min="0" value="0"
+                            onchange="updatePrintCount(${pc.id}, this.value)"
+                            class="service-input w-1/2 p-1.5 text-right rounded-md bg-neo-dark text-white border border-neo-print-bg focus:ring-1 focus:ring-neo-print-bg" />
+                    </div>
+                </div>
+
+                <!-- Costo Total -->
+                <div class="bg-neo-darker-blue p-4 rounded-lg mb-6 border border-neo-blue-strong/70">
+                    <p class="text-sm text-gray-300">Total a Cobrar</p>
+                    <div id="cost-${pc.id}" class="text-4xl font-extrabold mt-1 text-green-400">
+                        $0.00 MXN
+                    </div>
+                </div>
+
+
+                <div class="flex space-x-3">
+                    <!-- Botón de Iniciar/Reanudar con color azul fuerte -->
+                    <button id="btn-start-${pc.id}" onclick="startSession(${pc.id})"
+                        class="flex-1 py-3 px-4 rounded-lg font-semibold bg-neo-blue-strong hover:bg-neo-cyan neon-button">
+                        INICIAR
+                    </button>
+                    <button id="btn-stop-${pc.id}" onclick="stopSession(${pc.id})"
+                        class="flex-1 py-3 px-4 rounded-lg font-semibold bg-red-600 hover:bg-red-500 neon-button">
+                        FINALIZAR
+                    </button>
+                </div>
+
+                <!-- Contenedor de Resumen/Reiniciar -->
+                <div id="reset-container-${pc.id}" class="mt-4 p-3 bg-neo-dark/50 rounded-lg hidden">
+                    <p class="text-sm text-gray-300 font-bold mb-2 text-center">✅ SESIÓN FINALIZADA</p>
+                    <p class="text-xs text-left text-gray-400">
+                        Tiempo: <span class="font-mono text-neo-cyan" id="final-time-${pc.id}">00:00:00</span>
+                        | PC: <span id="final-pc-cost-${pc.id}">$0.00</span>
+                    </p>
+                    <p class="text-xs text-left text-gray-400">
+                        Servicios: <span id="final-service-cost-${pc.id}">$0.00</span>
+                        (<span id="final-prints-${pc.id}">0</span> imp.)
+                    </p>
+                    <hr class="border-gray-700 my-2">
+                    <p class="text-lg font-extrabold text-green-400 text-center">
+                        Total: <span id="final-total-cost-${pc.id}">$0.00 MXN</span>
+                    </p>
+                    <button onclick="resetSession(${pc.id})"
+                        class="w-full mt-2 py-2 px-4 rounded-lg text-sm font-medium bg-gray-600 hover:bg-gray-500 transition duration-150">
+                        Reiniciar PC y Cobrar
+                    </button>
+                </div>
+            `;
+            return card;
+        }
+
+        // Actualiza solo los elementos de visualización de una PC
+        function updatePCDisplay(pc) {
+            const timeDisplay = document.getElementById(`time-${pc.id}`);
+            const pcCostDisplay = document.getElementById(`pc-cost-${pc.id}`);
+            const totalCostDisplay = document.getElementById(`cost-${pc.id}`);
+            const statusIndicator = document.getElementById(`status-${pc.id}`);
+            const btnStart = document.getElementById(`btn-start-${pc.id}`);
+            const btnStop = document.getElementById(`btn-stop-${pc.id}`);
+            const resetContainer = document.getElementById(`reset-container-${pc.id}`);
+
+            // Input de impresión
+            const inputPrints = document.getElementById(`prints-${pc.id}`);
+            
+            // Recalcular costos y tiempo en cada actualización
+            const displayTime = formatTime(pc.elapsedTime);
+            const currentPCCost = calculatePCCost(pc.elapsedTime);
+            const currentTotalCost = calculateTotalCost(pc); 
+
+            // 1. Mostrar Tiempos y Costos
+            timeDisplay.textContent = displayTime;
+            pcCostDisplay.textContent = `$${currentPCCost.toFixed(2)} MXN (Solo PC)`;
+            totalCostDisplay.textContent = `$${currentTotalCost.toFixed(2)} MXN`;
+
+            // Asegurar que el input refleje el estado actual
+            inputPrints.value = pc.prints;
+
+            // 2. Actualizar Estado
+            if (pc.isRunning) {
+                // Estado ACTIVO
+                statusIndicator.className = 'w-4 h-4 rounded-full bg-neo-cyan status-on';
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+                btnStart.classList.add('opacity-50', 'cursor-not-allowed');
+                btnStop.classList.remove('opacity-50', 'cursor-not-allowed');
+                resetContainer.classList.add('hidden');
+                
+                // El input debe estar habilitado
+                inputPrints.disabled = false;
+                inputPrints.classList.remove('opacity-50');
+
+            } else {
+                // Estado DETENIDO
+                statusIndicator.className = 'w-4 h-4 rounded-full bg-gray-500';
+                btnStop.disabled = true;
+                btnStop.classList.add('opacity-50', 'cursor-not-allowed');
+
+                // El input debe estar deshabilitado si la sesión no ha iniciado o está finalizada
+                inputPrints.disabled = true;
+                inputPrints.classList.add('opacity-50');
+
+                if (pc.elapsedTime > 0) {
+                    // Sesión finalizada (tiene tiempo y costo final)
+                    btnStart.textContent = 'REANUDAR';
+                    btnStart.disabled = false;
+                    btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+                    resetContainer.classList.remove('hidden');
+                    
+                    // Rellenar resumen final
+                    document.getElementById(`final-time-${pc.id}`).textContent = displayTime;
+                    document.getElementById(`final-pc-cost-${pc.id}`).textContent = `$${currentPCCost.toFixed(2)}`;
+                    document.getElementById(`final-service-cost-${pc.id}`).textContent = `$${pc.serviceCost.toFixed(2)}`;
+                    document.getElementById(`final-prints-${pc.id}`).textContent = pc.prints;
+                    document.getElementById(`final-total-cost-${pc.id}`).textContent = `$${currentTotalCost.toFixed(2)} MXN`;
+                    
+                } else {
+                    // Estado inicial o reseteado
+                    btnStart.textContent = 'INICIAR';
+                    btnStart.disabled = false;
+                    btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+                    resetContainer.classList.add('hidden');
+                }
+            }
+        }
+
+        // Inicializa la aplicación
+        function initializeApp() {
+            pcContainer.innerHTML = '';
+            pcs.forEach(pc => {
+                pcContainer.appendChild(createPCCard(pc));
+                updatePCDisplay(pc); // Renderizado inicial
+            });
+        }
+
+        // Inicia la aplicación al cargar la ventana
+        window.onload = initializeApp;
+
+    </script>
+</body>
+</html>
